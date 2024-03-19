@@ -153,15 +153,14 @@ def plot_hist(x : np.ndarray, label=None, Title =None, xlim : tuple = None, figs
 
 
 
-def plot(x : np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(20, 6), ax=None, marker=None, linestyle='-'):
+def plot(x : np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(20, 6), ax=None):
     """Plot bandpass (visibility vs frequency channel)"""
     if ax is None:  # Create a new figure and axes if not being, passed in as a parameter
         fig, ax = plt.subplots(1, 1, figsize=figsize)
-    ax.plot(x, label=label,marker = '.', linestyle='-')
+    ax.plot(x, label=label)
     ax.set_title(Title)
     ax.legend()
 
-    
     if ylim is not None:
         ax.set_ylim(*ylim)
         
