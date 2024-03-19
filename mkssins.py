@@ -1,19 +1,21 @@
 #Imports
-import numpy as np
-import matplotlib.pylab as plt
-import warnings
-import time
-import pickle
-import sys
-import katcali
+
 import katcali.io as kio
 import katcali.label_dump as kl
 import katcali.diode as kd
 from pathlib import Path
+
 def good_ant(fname):
 
-    """
-    Fuction to retrieve list of good antennas.
+    """ This fuction retrieves list of good antennas from the observation.
+    Parameters:
+    ----------
+    Fname : Path to observation block.
+
+    Returns:
+    --------
+    ants_good : List of antennas.
+    
     """
 
     data=kio.load_data(fname)
@@ -27,11 +29,12 @@ def good_ant(fname):
         print (str(i) + ' is bad')
 
     return ants_good
-"""
-Define a function that will access the data block and return visibility data, flags, noise diodes vector. 
-"""
-def visData(fname, ant, pol):
-    """
+
+
+def visData(fname, ant, pol, verbos=False):
+    
+    """ This function  will access the data block and return visibility data, flags, noise diodes vector. 
+    
     Parameters:
     ----------
     Fname: Path to observation block.
@@ -48,17 +51,20 @@ def visData(fname, ant, pol):
     ants_good = good_ant(fname)
     data.select(ants=ant, pol=pol)
     recv = ant + pol
-    print(recv)
+    if verbos:  # i.e. verbos=True
+        print(recv)
     corr_id = kio.cal_corr_id(data, recv)
 
     assert(recv == data.corr_products[corr_id][0])
     assert(recv == data.corr_products[corr_id][1])
 
-    print("Correlation ID:", corr_id, "Receiver:", recv)
+    if verbos:
+        print("Correlation ID:", corr_id, "Receiver:", recv)
 
     # Load visibilities and flags
     vis, flags = kio.call_vis(fname, recv)
-    print("Shape of vis:", vis.copy().shape)
+    if verbos:
+        print("Shape of vis:", vis.copy().shape)
     vis_backup = vis.copy()
 
     ra, dec, az, el = kio.load_coordinates(data)
@@ -78,9 +84,9 @@ def visData(fname, ant, pol):
     return vis, nd_s0
 
 
-def MaskedArrayVisibilityFlags(vis, flags_mask, nd_s0):
-    """
-    Reason of the masked array: Apply masks to noise diodes and bright RFI flags, so that they are not time differenced in the TOD array. Ensures that we are performing correct neighbouring time channel subtractions
+def MaskedArrayVisibilityFlags(vis, flags, nd_s0):
+    
+    """This function applies masks to noise diodes and bright RFI flags, so that they are not time differenced in the TOD array. Ensures that we are performing correct neighbouring time channel subtractions
     
     Parameters:
     ----------
@@ -94,9 +100,10 @@ def MaskedArrayVisibilityFlags(vis, flags_mask, nd_s0):
     data0 = vis.copy
 
 
-    nd_flags = np.ones_like(vis, dtype=bool)          # Empty mask, where all values are set to true. True is flagged data
+    nd_flags = np.ones_like(vis, dtype=bool)      
+    # Empty mask, where all values are set to true. True is flagged data
     nd_flags[nd_s0, :] = False                        # Set the data with noise diodes removed to False so that this data is not flagged as bad data.  This is the scan only data.
-    #other_flags = np.logical_or(flags, flags_mask)   # All other flags from the visData function. Boolean value is True.
+    #other_flags = np.logical_or(flags_L0, flags_L1)   # All other flags from the visData function. Boolean value is True.
     other_flags = flags_mask 
 
     allflags =  np.logical_or(nd_flags, other_flags)  # Apply logical operator or to combine the noise diode flags, and visilibity data at a specific stage flags. 
