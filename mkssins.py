@@ -1,5 +1,9 @@
 #Imports
-
+import pickle
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib.colors import LogNorm
+import matplotlib as mpl
 import katcali.io as kio
 import katcali.label_dump as kl
 import katcali.diode as kd
@@ -104,7 +108,7 @@ def MaskedArrayVisibilityFlags(vis, flags, nd_s0):
     # Empty mask, where all values are set to true. True is flagged data
     nd_flags[nd_s0, :] = False                        # Set the data with noise diodes removed to False so that this data is not flagged as bad data.  This is the scan only data.
     #other_flags = np.logical_or(flags_L0, flags_L1)   # All other flags from the visData function. Boolean value is True.
-    other_flags = flags_mask 
+    other_flags = flags 
 
     allflags =  np.logical_or(nd_flags, other_flags)  # Apply logical operator or to combine the noise diode flags, and visilibity data at a specific stage flags. 
 
@@ -142,29 +146,27 @@ def abba(array: np.ndarray):
     array = array.filled()
     vis_abba = (array[1:-2]+array[2:-1])/2 - (array[0:-3]+array[3:])/2
     return vis_abba
-    
 
-def plot_hist(x : np.ndarray, label=None, Title =None, xlim : tuple = None, figsize=None, ax=None, bins=None, alpha=None, density=True, color='r',edgecolor='black'):
+def plot_hist(x : np.ndarray, label=None, Title =None, xlim : tuple = None, figsize=None, ax=None, bins=None, alpha=None, density=None, color=None ,edgecolor=None, histtype=None, xlabel=None, ylabel=None):
    
     if ax is None:  # Create a new figure and axes if not being passed in as a parameter
         fig, ax = plt.subplots(1, 1, figsize=figsize)
-    ax.hist(x, label=label,bins=bins, alpha=alpha, density=density, color=color, edgecolor=edgecolor)
+    ax.hist(x, label=label,bins=bins, alpha=alpha, density=density, color=color, edgecolor=edgecolor, histtype=histtype)
     ax.legend()
     ax.set_title(Title)
+    ax.set_xlabel(xlabel=xlabel)
+    ax.set_ylabel(ylabel=ylabel)
     if xlim is not None:
         ax.set_xlim(*xlim)
         
     return ax
 
 
-
-
-
 def plot(x : np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(20, 6), ax=None, marker=None, linestyle='-'):
     """Plot bandpass (visibility vs frequency channel)"""
     if ax is None:  # Create a new figure and axes if not being, passed in as a parameter
         fig, ax = plt.subplots(1, 1, figsize=figsize)
-    ax.plot(x, label=label,marker = '.', linestyle='-')
+    ax.plot(x, label=label,marker = '', linestyle='-')
     ax.set_title(Title)
     ax.legend()
 
@@ -176,16 +178,16 @@ def plot(x : np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(
 
 
 
-def plot_waterfall(x,label=None,  Title =None, ylim : tuple = None, figsize=None, ax=None, vmax=None,vmin=None, interpolation= None, norm=None):
+def plot_waterfall(x,label=None,  Title =None, ylim : tuple = None, figsize=None, ax=None, vmax=None,vmin=None, interpolation= None, norm=None, cmap=None, xlabel=None, ylabel=None, clabel=None):
 
     if ax is None:  # Create a new figure and axes if not being passed in as a parameter
         fig, ax = plt.subplots(1, 1, figsize=figsize)
     im = ax.imshow(x, label=label, vmax=vmax, vmin=vmin, interpolation=interpolation, cmap='viridis', aspect='auto', norm=norm)
     ax.set_title(Title)
-    plt.colorbar(im, ax=ax) 
-    
-
-   
+    ax.set_xlabel(xlabel=xlabel)
+    ax.set_ylabel(ylabel=ylabel)
+    #fig.colorbar(im, ax=ax) 
+    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),ax=ax, label=clabel) 
     
     if ylim is not None:
         ax.set_ylim(*ylim)
@@ -193,18 +195,45 @@ def plot_waterfall(x,label=None,  Title =None, ylim : tuple = None, figsize=None
 
 
 
-
 def ants_checked_L1(fname, path):
-    obsfolder = Path(path)
-    
     ants =[]
     obsblock_ant_pol = []
+    obsfolder = Path(path)
     for f in sorted(obsfolder.glob(fname+'_m*h*')):
         filename =  f.name.split('_')[0]
-        antpol = f.name.split('1630519596_')[1]
+        #print(filename)
+        antpol = f.name.split(fname+'_')[1]
+        #print(antpol)
         ant= antpol[0:4].split('h')
         ants.append(ant)
         pol = antpol[4:5]
-        
+    
        
     return(ants)
+
+
+def cal_zscore(SS_all_spectrums):
+
+    """ This fuction calculates the z-scores.
+    Parameters:
+    ----------
+    SS_all_spectrums: Array of all antenna sky subtraction spectrums, has the shape (no.Dishes, Time, Frequency)
+    
+    Returns:
+    --------
+
+    z_score: 2D array of the normalised Incoherent Spectrum.
+    
+    """
+    
+    IncoherentSpectrum = np.nanmean(np.abs(SS_all_spectrums), axis=0)
+    no_dishes = SS_all_spectrums.shape[0]
+    c_fold = np.pi / 2 - 1                            #Auto C_fold Ratio
+    meanEst = np.nanmean(IncoherentSpectrum, axis=0) #Time axis averaged MeanEstimate
+    std_sq = c_fold*meanEst**2 
+   
+    z_score = ((IncoherentSpectrum-meanEst))/np.sqrt(std_sq/no_dishes)
+   
+    
+    return z_score                                   #returns 2D array of the z scores
+    
