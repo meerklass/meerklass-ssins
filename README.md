@@ -7,3 +7,5 @@ Clone the repository. Then, to run the notebooks, create a python environment wi
 ```
 conda env create -f environment.yaml
 ```
+
+This will create a environment named `katcali` with all the neccessary modules.
