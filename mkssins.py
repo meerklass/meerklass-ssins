@@ -9,6 +9,9 @@ import katcali.label_dump as kl
 import katcali.diode as kd
 from pathlib import Path
 
+from astropy.coordinates import SkyCoord
+from astropy import units as u
+
 def good_ant(fname):
 
     """ This fuction retrieves list of good antennas from the observation.
@@ -84,11 +87,20 @@ def visData(fname, ant, pol, verbos=False):
 
 
     nd_t0, nd_t1x, nd_s0, nd_s1x, nd_t0_ca, nd_t0_cb, nd_t1x_ca, nd_t1x_cb = kl.cal_label_intersec(dp_tt, dp_ss, nd_0, nd_1x)
+    p_radec=np.loadtxt('radio_source2021.txt')
+    
+    dp_sb=dp_ss[0]
+    dp_se=dp_ss[-1]
+    
+    p = SkyCoord(data.ra*u.deg,  data.dec*u.deg, frame='icrs')
+    ang_lim=.5
+    
+    dp_ptr_list=kl.cal_ptr_mask(p,p_radec,nd_s0, dp_sb,dp_se,ang_lim)
 
-    return vis, nd_s0
 
+    return vis, nd_s0, dp_ptr_list
 
-def MaskedArrayVisibilityFlags(vis, flags, nd_s0):
+def MaskedArrayVisibilityFlags(vis, pipeline_flags, nd_s0, pointsource_flags=None):
     
     """This function applies masks to noise diodes and bright RFI flags, so that they are not time differenced in the TOD array. Ensures that we are performing correct neighbouring time channel subtractions
     
@@ -106,12 +118,15 @@ def MaskedArrayVisibilityFlags(vis, flags, nd_s0):
 
     nd_flags = np.ones_like(vis, dtype=bool)      
     # Empty mask, where all values are set to true. True is flagged data
-    nd_flags[nd_s0, :] = False                        # Set the data with noise diodes removed to False so that this data is not flagged as bad data.  This is the scan only data.
+    nd_flags[nd_s0, :] = False# Set the data with noise diodes off to False so that this data is not flagged as bad data.  This is the  scan only data.
     #other_flags = np.logical_or(flags_L0, flags_L1)   # All other flags from the visData function. Boolean value is True.
-    other_flags = flags 
-
-    allflags =  np.logical_or(nd_flags, other_flags)  # Apply logical operator or to combine the noise diode flags, and visilibity data at a specific stage flags. 
-
+    
+    old_flags =  np.logical_or(nd_flags, pipeline_flags)
+    point_source_flags = pointsource_flags
+    point_source_flags = np.ones_like(old_flags, dtype=bool)
+    point_source_flags[pointsource_flags,:] = False 
+    allflags = np.logical_or(~point_source_flags, old_flags) 
+  
     data_masked = np.ma.masked_array(vis, mask=allflags, fill_value = np.nan)
 
     return data_masked
@@ -187,7 +202,7 @@ def plot_waterfall(x,label=None,  Title =None, ylim : tuple = None, figsize=None
     ax.set_xlabel(xlabel=xlabel)
     ax.set_ylabel(ylabel=ylabel)
     #fig.colorbar(im, ax=ax) 
-    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),ax=ax, label=clabel) 
+    plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),ax=ax, label=clabel) 
     
     if ylim is not None:
         ax.set_ylim(*ylim)
@@ -236,4 +251,77 @@ def cal_zscore(SS_all_spectrums):
    
     
     return z_score                                   #returns 2D array of the z scores
+
+
+def mask_to_flags(zscore_mask, nd_flags, l1_flags):
+    """This function propagates the masks of the outliers found in the z-scores to flags in the Time-Ordered Data (non-time differenced)
     
+    Parameters:
+    -----------
+    zscore_mask: 2D (t, f), boolean array of the outliers for a specific thresholding. (True - Flag Data , False -  Unflagged Data)
+    
+    Returns:
+    -------
+    zscore_flags_dict: Returns the flags as a dictionary, can be combined with the older pipline flags (dictionary) 
+
+
+    """
+    
+    shape = list(zscore_mask.shape)
+    flags_new = np.zeros([shape[0] + 3] + shape[1:], dtype=bool)  #(t, f) ----> (3467, 4096)  # expanded the dims
+    flags_new[:-3] = zscore_mask
+    flags_new[:] = np.logical_or(flags_new[:], flags_new[:])
+   
+    allflags =  np.logical_or(nd_flags, l1_flags)
+    new_flags = np.logical_or(flags_new, allflags)
+    zscore_flags_dict = {}
+    for ant in ants:
+        zscore_flags_dict[ant[0]] = new_flags
+        
+        
+    return zscore_flags_dict
+
+def stacked_flags(pipeline_flags):
+    stacked_flags = np.stack(list(pipeline_flags.values()), axis=0)
+    stacked_int_flags = stacked_flags.astype(int)
+    stacked_score= np.sum(stacked_int_flags, axis=0)
+    stacked_flag = ((stacked_score.astype(float) == 59)) 
+    return stacked_flag
+
+
+def mask_to_flags(zscore_mask, nd_flags=None, pipeline_flags=None):
+
+    """This function will return the flags for the raw, non-time differenced data"""
+    
+    shape = list(zscore_mask.shape)
+    flags_new = np.zeros([shape[0] + 3] + shape[1:], dtype=bool)  #(t, f) ----> (3467, 4096)  # expanded the dims
+    flags_new[:-3] = zscore_mask
+    flags_new[3:] = np.logical_or(flags_new[3:], flags_new[:-3])
+    
+    if nd_flags is None and pipeline_flags is None:
+        return flags_new
+
+    else:
+        
+        nd_flags= stacked_flags(nd_flags)
+        nd_flags = np.ones_like(flags_new, dtype=bool)
+        nd_flags[nd_s0, :] = False 
+        
+        pipeline_flags= stacked_flags(pipeline_flags)
+        
+        allflags =  np.logical_or(nd_flags, pipeline_flags)
+        new_flags = np.logical_or(flags_new, allflags)
+                
+    return new_flags
+
+
+def pipeline_flags(nd_flags, pipeline):
+    
+    pipeline_flags= stacked_flags(pipeline)
+    nd_flags= stacked_flags(nd_flags)
+    nd_flags = np.ones_like(pipeline_flags, dtype=bool)
+    nd_flags[nd_s0, :] = False 
+
+    
+    pipeline_flags =  np.logical_or(nd_flags, pipeline_flags)
+    return pipeline_flags
