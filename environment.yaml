@@ -1,0 +1,20 @@
+name: katcali
+channels:
+  - conda-forge
+  - default
+dependencies:
+  - python=3.10
+  - ipython
+  - ipykernel
+  - pip
+  - matplotlib
+  - numpy
+  - scipy
+  - scikit-learn
+  - astropy
+  - healpy
+  - pip:
+    - scikits.fitting
+    - git+https://github.com/b-thorne/PySM_public.git
+    - git+https://github.com/meerklass/katcali.git
+    - git+https://github.com/ska-sa/katdal.git
