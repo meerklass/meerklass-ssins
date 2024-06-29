@@ -176,18 +176,35 @@ def plot_hist(x : np.ndarray, label=None, Title =None, xlim : tuple = None, figs
         
     return ax
 
-
-def plot(x : np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(20, 6), ax=None, marker=None, linestyle='-'):
+def plot(x : np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(20, 6), ax=None, marker=None, linestyle='-', xlabel=None, ylabel=None, xlim=None):
     """Plot bandpass (visibility vs frequency channel)"""
     if ax is None:  # Create a new figure and axes if not being, passed in as a parameter
         fig, ax = plt.subplots(1, 1, figsize=figsize)
-    ax.plot(x, label=label,marker = '', linestyle='-')
+    ax.plot(x,label=label,marker = '', linestyle='-')
     ax.set_title(Title)
+    ax.set_xlabel(xlabel=xlabel)
+    ax.set_ylabel(ylabel=ylabel)
     ax.legend()
+    ax.grid(color='grey', which='both', lw=0.1)
+    
+def plot_x_y(x : np.ndarray,y:np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(20, 6), ax=None, marker=None, linestyle='-', xlabel=None, ylabel=None, xlim=None):
+    """Plot bandpass (visibility vs frequency channel)"""
+    if ax is None:  # Create a new figure and axes if not being, passed in as a parameter
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
+    ax.plot(x,y,label=label,marker = '', linestyle='-')
+    ax.set_title(Title)
+    ax.set_xlabel(xlabel=xlabel)
+    ax.set_ylabel(ylabel=ylabel)
+    ax.legend()
+    ax.grid(color='grey', which='both', lw=0.1)
+
 
     
     if ylim is not None:
         ax.set_ylim(*ylim)
+
+    if xlim is not None:
+        ax.set_xlim(*xlim)
         
     return ax
 
@@ -281,15 +298,26 @@ def mask_to_flags(zscore_mask, nd_flags, l1_flags):
         
     return zscore_flags_dict
 
-def stacked_flags(pipeline_flags):
+def stacked_flags(pipeline_flags, score : np.int):
+    """This function create a combined mask by summing the flags accross recievers and taking a relevant score
+    Parameters:
+    -----------
+    score == 59
+    pipeline_flags: dict of the pipelines flags for each receiver in the observation block
+    
+    Return:
+    -------
+    stacked_flag: 2D nd.array (t,f)
+    
+    """
     stacked_flags = np.stack(list(pipeline_flags.values()), axis=0)
     stacked_int_flags = stacked_flags.astype(int)
     stacked_score= np.sum(stacked_int_flags, axis=0)
-    stacked_flag = ((stacked_score.astype(float) == 59)) 
+    stacked_flag = ((stacked_score.astype(float) == score)) 
     return stacked_flag
 
 
-def mask_to_flags(zscore_mask, nd_flags=None, pipeline_flags=None):
+def mask_to_flags(nd_s0, zscore_mask, nd_flags=None, pipeline_flags=None):
 
     """This function will return the flags for the raw, non-time differenced data"""
     
@@ -315,7 +343,7 @@ def mask_to_flags(zscore_mask, nd_flags=None, pipeline_flags=None):
     return new_flags
 
 
-def pipeline_flags(nd_flags, pipeline):
+def pipeline_flags(nd_s0, nd_flags, pipeline):
     
     pipeline_flags= stacked_flags(pipeline)
     nd_flags= stacked_flags(nd_flags)
@@ -325,3 +353,24 @@ def pipeline_flags(nd_flags, pipeline):
     
     pipeline_flags =  np.logical_or(nd_flags, pipeline_flags)
     return pipeline_flags
+
+def mask_all_fchan_tchan(z_flags, c_t, c_f):
+    z_flags_all = z_flags.copy()
+    
+
+    for i in range(z_flags_all.shape[1]):      
+        num_flagged = np.sum(z_flags[:, i]==True)
+    
+        c = num_flagged / z_flags_all.shape[0]
+        
+        if c > c_f:
+            z_flags_all[:, i] = True  
+    
+    for i in range(z_flags_all.shape[0]):
+        num_flagged = np.sum(z_flags[i, :]==True)
+
+        c = num_flagged / z_flags_all.shape[1]
+    
+        if (c > c_t):
+            z_flags_all[i, :] = True
+    return z_flags_all
