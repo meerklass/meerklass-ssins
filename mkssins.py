@@ -118,7 +118,7 @@ def MaskedArrayVisibilityFlags(vis, pipeline_flags, nd_s0, pointsource_flags=Non
 
     nd_flags = np.ones_like(vis, dtype=bool)      
     # Empty mask, where all values are set to true. True is flagged data
-    nd_flags[nd_s0, :] = False# Set the data with noise diodes off to False so that this data is not flagged as bad data.  This is the  scan only data.
+    nd_flags[nd_s0, :] = False # Set the data with noise diodes off to False so that this data is not flagged as bad data.  This is the  scan only data.
     #other_flags = np.logical_or(flags_L0, flags_L1)   # All other flags from the visData function. Boolean value is True.
     
     old_flags =  np.logical_or(nd_flags, pipeline_flags)
@@ -145,7 +145,7 @@ def SkySubtraction(data_masked):
 
 
 def abba(array: np.ndarray):
-    """Calculate ABBA dithering (interpolation) from a 1D array (time series).
+    """Calculate ABBA dithering (interpolation) from a 2D array (time, freq).
     Performs 4 channel differencing of time.
     
     Parameters
@@ -171,6 +171,7 @@ def plot_hist(x : np.ndarray, label=None, Title =None, xlim : tuple = None, figs
     ax.set_title(Title)
     ax.set_xlabel(xlabel=xlabel)
     ax.set_ylabel(ylabel=ylabel)
+    ax.set_ylim()
     if xlim is not None:
         ax.set_xlim(*xlim)
         
@@ -298,7 +299,7 @@ def mask_to_flags(zscore_mask, nd_flags, l1_flags):
         
     return zscore_flags_dict
 
-def stacked_flags(pipeline_flags, score : np.int):
+def stacked_flags(pipeline_flags):
     """This function create a combined mask by summing the flags accross recievers and taking a relevant score
     Parameters:
     -----------
@@ -313,7 +314,7 @@ def stacked_flags(pipeline_flags, score : np.int):
     stacked_flags = np.stack(list(pipeline_flags.values()), axis=0)
     stacked_int_flags = stacked_flags.astype(int)
     stacked_score= np.sum(stacked_int_flags, axis=0)
-    stacked_flag = ((stacked_score.astype(float) == score)) 
+    stacked_flag = ((stacked_score.astype(float) >= 58)) 
     return stacked_flag
 
 
@@ -374,3 +375,13 @@ def mask_all_fchan_tchan(z_flags, c_t, c_f):
         if (c > c_t):
             z_flags_all[i, :] = True
     return z_flags_all
+
+
+
+
+def dict_to_array(dictionary):
+    array = []
+    for chan, flag in dictionary.items():
+        array.append(flag)
+    array = np.array(array)
+    return array
