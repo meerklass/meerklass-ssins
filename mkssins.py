@@ -227,23 +227,21 @@ def plot_waterfall(x,label=None,  Title =None, ylim : tuple = None, figsize=None
     return ax
 
 
-
-def ants_checked_L1(fname, path):
+def ants_checked_L1(fname, path, pol):
     ants =[]
     obsblock_ant_pol = []
     obsfolder = Path(path)
-    for f in sorted(obsfolder.glob(fname+'_m*h*')):
+    for f in sorted(obsfolder.glob(fname+f'_m*{pol}*')):
         filename =  f.name.split('_')[0]
         #print(filename)
         antpol = f.name.split(fname+'_')[1]
         #print(antpol)
-        ant= antpol[0:4].split('h')
-        ants.append(ant)
+        ant= antpol[0:4].split(f'{pol}')
+        #print(ant)
+        ants.append(ant[0])
+        #print(ants)
         pol = antpol[4:5]
-    
-       
-    return(ants)
-
+    return ants
 
 def cal_zscore(SS_all_spectrums):
 
@@ -271,8 +269,10 @@ def cal_zscore(SS_all_spectrums):
     return z_score                                   #returns 2D array of the z scores
 
 
-def mask_to_flags(zscore_mask, nd_flags, l1_flags):
-    """This function propagates the masks of the outliers found in the z-scores to flags in the Time-Ordered Data (non-time differenced)
+
+def mask_to_flags(nd_s0, zscore_mask, ants, nd_flags=None, pipeline_flags=None):
+
+    """This function will return the flags for the raw, non-time differenced data. This function propagates the masks of the outliers found in the z-scores to flags in the Time-Ordered Data (non-time differenced)
     
     Parameters:
     -----------
@@ -286,20 +286,28 @@ def mask_to_flags(zscore_mask, nd_flags, l1_flags):
     """
     
     shape = list(zscore_mask.shape)
-    flags_new = np.zeros([shape[0] + 3] + shape[1:], dtype=bool)  #(t, f) ----> (3467, 4096)  # expanded the dims
+    flags_new = np.zeros([shape[0] + 3] + shape[1:], dtype=bool)  #(t, f) ----> (time, frequency)  # expanded the dims
     flags_new[:-3] = zscore_mask
-    flags_new[:] = np.logical_or(flags_new[:], flags_new[:])
-   
-    allflags =  np.logical_or(nd_flags, l1_flags)
-    new_flags = np.logical_or(flags_new, allflags)
-    zscore_flags_dict = {}
-    for ant in ants:
-        zscore_flags_dict[ant[0]] = new_flags
-        
-        
-    return zscore_flags_dict
+    flags_new[3:] = np.logical_or(flags_new[3:], flags_new[:-3])
+    
+    if nd_flags is None and pipeline_flags is None:
+        return flags_new
 
-def stacked_flags(pipeline_flags):
+    else:
+        
+        nd_flags= stacked_flags(nd_flags, ants)
+        nd_flags = np.ones_like(flags_new, dtype=bool)
+        nd_flags[nd_s0, :] = False 
+        
+        pipeline_flags= stacked_flags(pipeline_flags, ants)
+        
+        allflags =  np.logical_or(nd_flags, pipeline_flags)
+        new_flags = np.logical_or(flags_new, allflags)
+                
+    return new_flags
+
+
+def stacked_flags(pipeline_flags, ants):
     """This function create a combined mask by summing the flags accross recievers and taking a relevant score
     Parameters:
     -----------
@@ -311,43 +319,17 @@ def stacked_flags(pipeline_flags):
     stacked_flag: 2D nd.array (t,f)
     
     """
+    
     stacked_flags = np.stack(list(pipeline_flags.values()), axis=0)
     stacked_int_flags = stacked_flags.astype(int)
     stacked_score= np.sum(stacked_int_flags, axis=0)
-    stacked_flag = ((stacked_score.astype(float) >= 58)) 
+    stacked_flag = ((stacked_score.astype(float) >= len(ants)-1)) 
     return stacked_flag
 
-
-def mask_to_flags(nd_s0, zscore_mask, nd_flags=None, pipeline_flags=None):
-
-    """This function will return the flags for the raw, non-time differenced data"""
+def pipeline_flags(nd_s0, ants, nd_flags, pipeline):
     
-    shape = list(zscore_mask.shape)
-    flags_new = np.zeros([shape[0] + 3] + shape[1:], dtype=bool)  #(t, f) ----> (3467, 4096)  # expanded the dims
-    flags_new[:-3] = zscore_mask
-    flags_new[3:] = np.logical_or(flags_new[3:], flags_new[:-3])
-    
-    if nd_flags is None and pipeline_flags is None:
-        return flags_new
-
-    else:
-        
-        nd_flags= stacked_flags(nd_flags)
-        nd_flags = np.ones_like(flags_new, dtype=bool)
-        nd_flags[nd_s0, :] = False 
-        
-        pipeline_flags= stacked_flags(pipeline_flags)
-        
-        allflags =  np.logical_or(nd_flags, pipeline_flags)
-        new_flags = np.logical_or(flags_new, allflags)
-                
-    return new_flags
-
-
-def pipeline_flags(nd_s0, nd_flags, pipeline):
-    
-    pipeline_flags= stacked_flags(pipeline)
-    nd_flags= stacked_flags(nd_flags)
+    pipeline_flags= stacked_flags(pipeline, ants)
+    nd_flags= stacked_flags(nd_flags, ants)
     nd_flags = np.ones_like(pipeline_flags, dtype=bool)
     nd_flags[nd_s0, :] = False 
 
@@ -355,6 +337,7 @@ def pipeline_flags(nd_s0, nd_flags, pipeline):
     pipeline_flags =  np.logical_or(nd_flags, pipeline_flags)
     return pipeline_flags
 
+    
 def mask_all_fchan_tchan(z_flags, c_t, c_f):
     z_flags_all = z_flags.copy()
     
