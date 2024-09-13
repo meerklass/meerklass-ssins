@@ -118,7 +118,7 @@ def MaskedArrayVisibilityFlags(vis, pipeline_flags, nd_s0, pointsource_flags=Non
 
     nd_flags = np.ones_like(vis, dtype=bool)      
     # Empty mask, where all values are set to true. True is flagged data
-    nd_flags[nd_s0, :] = False# Set the data with noise diodes off to False so that this data is not flagged as bad data.  This is the  scan only data.
+    nd_flags[nd_s0, :] = False # Set the data with noise diodes off to False so that this data is not flagged as bad data.  This is the  scan only data.
     #other_flags = np.logical_or(flags_L0, flags_L1)   # All other flags from the visData function. Boolean value is True.
     
     old_flags =  np.logical_or(nd_flags, pipeline_flags)
@@ -145,7 +145,7 @@ def SkySubtraction(data_masked):
 
 
 def abba(array: np.ndarray):
-    """Calculate ABBA dithering (interpolation) from a 1D array (time series).
+    """Calculate ABBA dithering (interpolation) from a 2D array (time, freq).
     Performs 4 channel differencing of time.
     
     Parameters
@@ -171,23 +171,41 @@ def plot_hist(x : np.ndarray, label=None, Title =None, xlim : tuple = None, figs
     ax.set_title(Title)
     ax.set_xlabel(xlabel=xlabel)
     ax.set_ylabel(ylabel=ylabel)
+    ax.set_ylim()
     if xlim is not None:
         ax.set_xlim(*xlim)
         
     return ax
 
-
-def plot(x : np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(20, 6), ax=None, marker=None, linestyle='-'):
+def plot(x : np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(20, 6), ax=None, marker=None, linestyle='-', xlabel=None, ylabel=None, xlim=None):
     """Plot bandpass (visibility vs frequency channel)"""
     if ax is None:  # Create a new figure and axes if not being, passed in as a parameter
         fig, ax = plt.subplots(1, 1, figsize=figsize)
-    ax.plot(x, label=label,marker = '', linestyle='-')
+    ax.plot(x,label=label,marker = '', linestyle='-')
     ax.set_title(Title)
+    ax.set_xlabel(xlabel=xlabel)
+    ax.set_ylabel(ylabel=ylabel)
     ax.legend()
+    ax.grid(color='grey', which='both', lw=0.1)
+    
+def plot_x_y(x : np.ndarray,y:np.ndarray, label=None, Title =None, ylim : tuple = None, figsize=(20, 6), ax=None, marker=None, linestyle='-', xlabel=None, ylabel=None, xlim=None):
+    """Plot bandpass (visibility vs frequency channel)"""
+    if ax is None:  # Create a new figure and axes if not being, passed in as a parameter
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
+    ax.plot(x,y,label=label,marker = '', linestyle='-')
+    ax.set_title(Title)
+    ax.set_xlabel(xlabel=xlabel)
+    ax.set_ylabel(ylabel=ylabel)
+    ax.legend()
+    ax.grid(color='grey', which='both', lw=0.1)
+
 
     
     if ylim is not None:
         ax.set_ylim(*ylim)
+
+    if xlim is not None:
+        ax.set_xlim(*xlim)
         
     return ax
 
@@ -209,23 +227,21 @@ def plot_waterfall(x,label=None,  Title =None, ylim : tuple = None, figsize=None
     return ax
 
 
-
-def ants_checked_L1(fname, path):
+def ants_checked_L1(fname, path, pol):
     ants =[]
     obsblock_ant_pol = []
     obsfolder = Path(path)
-    for f in sorted(obsfolder.glob(fname+'_m*h*')):
+    for f in sorted(obsfolder.glob(fname+f'_m*{pol}*')):
         filename =  f.name.split('_')[0]
         #print(filename)
         antpol = f.name.split(fname+'_')[1]
         #print(antpol)
-        ant= antpol[0:4].split('h')
-        ants.append(ant)
+        ant= antpol[0:4].split(f'{pol}')
+        #print(ant)
+        ants.append(ant[0])
+        #print(ants)
         pol = antpol[4:5]
-    
-       
-    return(ants)
-
+    return ants
 
 def cal_zscore(SS_all_spectrums):
 
@@ -253,8 +269,10 @@ def cal_zscore(SS_all_spectrums):
     return z_score                                   #returns 2D array of the z scores
 
 
-def mask_to_flags(zscore_mask, nd_flags, l1_flags):
-    """This function propagates the masks of the outliers found in the z-scores to flags in the Time-Ordered Data (non-time differenced)
+
+def mask_to_flags(nd_s0, zscore_mask, ants, nd_flags=None, pipeline_flags=None):
+
+    """This function will return the flags for the raw, non-time differenced data. This function propagates the masks of the outliers found in the z-scores to flags in the Time-Ordered Data (non-time differenced)
     
     Parameters:
     -----------
@@ -268,33 +286,7 @@ def mask_to_flags(zscore_mask, nd_flags, l1_flags):
     """
     
     shape = list(zscore_mask.shape)
-    flags_new = np.zeros([shape[0] + 3] + shape[1:], dtype=bool)  #(t, f) ----> (3467, 4096)  # expanded the dims
-    flags_new[:-3] = zscore_mask
-    flags_new[:] = np.logical_or(flags_new[:], flags_new[:])
-   
-    allflags =  np.logical_or(nd_flags, l1_flags)
-    new_flags = np.logical_or(flags_new, allflags)
-    zscore_flags_dict = {}
-    for ant in ants:
-        zscore_flags_dict[ant[0]] = new_flags
-        
-        
-    return zscore_flags_dict
-
-def stacked_flags(pipeline_flags):
-    stacked_flags = np.stack(list(pipeline_flags.values()), axis=0)
-    stacked_int_flags = stacked_flags.astype(int)
-    stacked_score= np.sum(stacked_int_flags, axis=0)
-    stacked_flag = ((stacked_score.astype(float) == 59)) 
-    return stacked_flag
-
-
-def mask_to_flags(zscore_mask, nd_flags=None, pipeline_flags=None):
-
-    """This function will return the flags for the raw, non-time differenced data"""
-    
-    shape = list(zscore_mask.shape)
-    flags_new = np.zeros([shape[0] + 3] + shape[1:], dtype=bool)  #(t, f) ----> (3467, 4096)  # expanded the dims
+    flags_new = np.zeros([shape[0] + 3] + shape[1:], dtype=bool)  #(t, f) ----> (time, frequency)  # expanded the dims
     flags_new[:-3] = zscore_mask
     flags_new[3:] = np.logical_or(flags_new[3:], flags_new[:-3])
     
@@ -303,11 +295,11 @@ def mask_to_flags(zscore_mask, nd_flags=None, pipeline_flags=None):
 
     else:
         
-        nd_flags= stacked_flags(nd_flags)
+        nd_flags= stacked_flags(nd_flags, ants)
         nd_flags = np.ones_like(flags_new, dtype=bool)
         nd_flags[nd_s0, :] = False 
         
-        pipeline_flags= stacked_flags(pipeline_flags)
+        pipeline_flags= stacked_flags(pipeline_flags, ants)
         
         allflags =  np.logical_or(nd_flags, pipeline_flags)
         new_flags = np.logical_or(flags_new, allflags)
@@ -315,13 +307,64 @@ def mask_to_flags(zscore_mask, nd_flags=None, pipeline_flags=None):
     return new_flags
 
 
-def pipeline_flags(nd_flags, pipeline):
+def stacked_flags(pipeline_flags, ants):
+    """This function create a combined mask by summing the flags accross recievers and taking a relevant score
+    Parameters:
+    -----------
+    score == 59
+    pipeline_flags: dict of the pipelines flags for each receiver in the observation block
     
-    pipeline_flags= stacked_flags(pipeline)
-    nd_flags= stacked_flags(nd_flags)
+    Return:
+    -------
+    stacked_flag: 2D nd.array (t,f)
+    
+    """
+    
+    stacked_flags = np.stack(list(pipeline_flags.values()), axis=0)
+    stacked_int_flags = stacked_flags.astype(int)
+    stacked_score= np.sum(stacked_int_flags, axis=0)
+    stacked_flag = ((stacked_score.astype(float) >= len(ants)-1)) 
+    return stacked_flag
+
+def pipeline_flags(nd_s0, ants, nd_flags, pipeline):
+    
+    pipeline_flags= stacked_flags(pipeline, ants)
+    nd_flags= stacked_flags(nd_flags, ants)
     nd_flags = np.ones_like(pipeline_flags, dtype=bool)
     nd_flags[nd_s0, :] = False 
 
     
     pipeline_flags =  np.logical_or(nd_flags, pipeline_flags)
     return pipeline_flags
+
+    
+def mask_all_fchan_tchan(z_flags, c_t, c_f):
+    z_flags_all = z_flags.copy()
+    
+
+    for i in range(z_flags_all.shape[1]):      
+        num_flagged = np.sum(z_flags[:, i]==True)
+    
+        c = num_flagged / z_flags_all.shape[0]
+        
+        if c > c_f:
+            z_flags_all[:, i] = True  
+    
+    for i in range(z_flags_all.shape[0]):
+        num_flagged = np.sum(z_flags[i, :]==True)
+
+        c = num_flagged / z_flags_all.shape[1]
+    
+        if (c > c_t):
+            z_flags_all[i, :] = True
+    return z_flags_all
+
+
+
+
+def dict_to_array(dictionary):
+    array = []
+    for chan, flag in dictionary.items():
+        array.append(flag)
+    array = np.array(array)
+    return array
