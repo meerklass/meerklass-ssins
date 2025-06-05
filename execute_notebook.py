@@ -71,15 +71,18 @@ def run_notebook(
 ):
     """Execute SSINS notebook via papermill CLI.
 
-    The executed notebook will be saved as `output_dir/notebook_name-block_number-pol.ipynb`
+    The executed notebook will be saved as:
+        `output_dir/notebook_name-block_number-pol.ipynb`
 
-    When running with SLURM, katcali environment will be sourced from miniforge3 
+    When running with SLURM, katcali environment will be sourced from miniforge3
     installation (see code or output sbatch script).
     """
     output_file = output_dir / f"{notebook_file.stem}-{block_number}-{pol}.ipynb"
 
-    command = f"papermill -k python3 -p block_number {block_number} -p pol {pol} " + \
-        f"{notebook_file.as_posix()} {output_file.as_posix()}"
+    command = (
+        f"papermill -k python3 -p block_number {block_number} -p pol {pol} "
+        + f"{notebook_file.as_posix()} {output_file.as_posix()}"
+    )
 
     if local:
         subprocess.run(command.split(), check=True)
