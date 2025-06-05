@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - default
 dependencies:
-  - python=3.10
+  - python=3.12
   - ipython
   - ipykernel
   - pip
@@ -13,6 +13,8 @@ dependencies:
   - scikit-learn
   - astropy
   - healpy
+  - click
+  - papermill
   - pip:
     - scikits.fitting
     - git+https://github.com/b-thorne/PySM_public.git
