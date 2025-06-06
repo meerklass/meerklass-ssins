@@ -119,7 +119,7 @@ def run_notebook(
             fl.write(sbatch)
 
         if not dry_run:
-            subprocess.run(["sbatch", "_run_sanity_check.sbatch"], check=True)
+            subprocess.run(["sbatch", "_execute_notebook.sbatch"], check=True)
 
 
 if __name__ == "__main__":
