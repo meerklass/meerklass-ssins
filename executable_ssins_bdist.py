@@ -14,7 +14,7 @@ def run_notebook(index):
     #parameter2 = {"Block": block[0], "pol":'v'}
 
 
-    pm.execute_notebook("meerklass-ssins/executable_ssins_bdist.ipynb", f"meerklass-ssins/ssins_bdist/output/output-notebook-{parameter1['Block']}-{parameter1['pol']}.ipynb", kernel_name =    "katcali", parameters=parameter1)
+    pm.execute_notebook("executable_ssins_bdist.ipynb", f"ssins_bdist/output/output-notebook-{parameter1['Block']}-{parameter1['pol']}.ipynb", kernel_name =    "katcali", parameters=parameter1)
     #pm.execute_notebook("MeerKLASS-SSINS_AnalysisNB-Executable.ipynb", f"SSINS_Flags/output_nb_good_block_only/output-notebook-{parameter2['Block']}-{parameter2['pol']}.ipynb", kernel_name =    "katcali", parameters=parameter2)
 
 
