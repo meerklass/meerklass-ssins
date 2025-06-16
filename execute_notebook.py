@@ -13,7 +13,23 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"], "max_content_width": 
     "--notebook-file",
     required=True,
     type=click.Path(exists=True, resolve_path=True, path_type=Path),
-    help="Path to the template notebook to run",
+    help="Path to the template notebook to run.",
+)
+@click.option(
+    "-b",
+    "--block-number",
+    required=True,
+    multiple=True,
+    type=str,
+    help="Block number of the observation (CB-ID), usually a 10-digit number. "
+    "Multiple allowed.",
+)
+@click.option(
+    "-p",
+    "--pol",
+    type=click.Choice(["h", "v"]),
+    required=True,
+    help="Polarisation to run, h or v.",
 )
 @click.option(
     "-o",
@@ -21,16 +37,7 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"], "max_content_width": 
     type=click.Path(exists=True, resolve_path=True, path_type=Path),
     default=Path("./"),
     show_default=True,
-    help="Output directory",
-)
-@click.option(
-    "-b",
-    "--block-number",
-    type=str,
-    help="Block number of the observation (CB-ID), usually a 10-digit number. ",
-)
-@click.option(
-    "-p", "--pol", type=click.Choice(["h", "v"]), help="Polarisation to run, h or v."
+    help="Output directory.",
 )
 @click.option(
     "--local/--slurm",
@@ -77,49 +84,50 @@ def run_notebook(
     When running with SLURM, katcali environment will be sourced from miniforge3
     installation (see code or output sbatch script).
     """
-    output_file = output_dir / f"{notebook_file.stem}-{block_number}-{pol}.ipynb"
+    for bn in block_number:
+        output_file = output_dir / f"{notebook_file.stem}-{bn}-{pol}.ipynb"
 
-    command = (
-        f"papermill -k python3 -p block_number {block_number} -p pol {pol} "
-        + f"{notebook_file.as_posix()} {output_file.as_posix()}"
-    )
+        command = (
+            f"papermill -k python3 -p block_number {bn} -p pol {pol} "
+            + f"{notebook_file.as_posix()} {output_file.as_posix()}"
+        )
 
-    if local:
-        subprocess.run(command.split(), check=True)
-    else:
-        sbatch = f"""#!/bin/bash
+        if local:
+            subprocess.run(command.split(), check=True)
+        else:
+            sbatch = f"""#!/bin/bash
 
-    #SBATCH --job-name={notebook_file.stem}-{block_number}
-    #SBATCH --output=logs/{notebook_file.stem}-{block_number}-%j.log
-    #SBATCH --partition=Main
-    #SBATCH --ntasks=1
-    #SBATCH --cpus-per-task={cpus_per_task}
-    #SBATCH --mem={mem}GB
-    #SBATCH --time={runtime}
+        #SBATCH --job-name={notebook_file.stem}-{bn}
+        #SBATCH --output=logs/{notebook_file.stem}-{bn}-%j.log
+        #SBATCH --partition=Main
+        #SBATCH --ntasks=1
+        #SBATCH --cpus-per-task={cpus_per_task}
+        #SBATCH --mem={mem}GB
+        #SBATCH --time={runtime}
 
-    # Set environment variables for Numpy threading
-    export MKL_NUM_THREADS=${{SLURM_CPUS_PER_TASK}}
-    export OPENBLAS_NUM_THREADS=${{SLURM_CPUS_PER_TASK}}
-    export OMP_NUM_THREADS=${{SLURM_CPUS_PER_TASK}}
+        # Set environment variables for Numpy threading
+        export MKL_NUM_THREADS=${{SLURM_CPUS_PER_TASK}}
+        export OPENBLAS_NUM_THREADS=${{SLURM_CPUS_PER_TASK}}
+        export OMP_NUM_THREADS=${{SLURM_CPUS_PER_TASK}}
 
-    # Activate conda and the katcali Python environment
-    source ~/miniforge3/bin/activate
-    conda activate katcali
-    echo "Using Python: $(which python)"
+        # Activate conda and the katcali Python environment
+        source ~/miniforge3/bin/activate
+        conda activate katcali
+        echo "Using Python: $(which python)"
 
-    # Executing papermill
-    {command}
-    """
-        sbatch_file = Path("./_execute_notebook.sbatch").resolve()
-        with open(sbatch_file, "w") as fl:
-            print(f"Generating an sbatch script, saving it to {sbatch_file}:")
-            print("-------BEGINING OF SBATCH-------")
-            print(sbatch)
-            print("-------END OF SBATCH-------")
-            fl.write(sbatch)
+        # Executing papermill
+        {command}
+        """
+            sbatch_file = Path("./_execute_notebook.sbatch").resolve()
+            with open(sbatch_file, "w") as fl:
+                print(f"Generating an sbatch script, saving it to {sbatch_file}:")
+                print("-------BEGINING OF SBATCH-------")
+                print(sbatch)
+                print("-------END OF SBATCH-------")
+                fl.write(sbatch)
 
-        if not dry_run:
-            subprocess.run(["sbatch", "_execute_notebook.sbatch"], check=True)
+            if not dry_run:
+                subprocess.run(["sbatch", "_execute_notebook.sbatch"], check=True)
 
 
 if __name__ == "__main__":
